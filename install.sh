@@ -38,17 +38,27 @@ check_operating_system() {
    fi
 }
 
-check_connection() {
-   # Checking internet connectivity to install
-   # TinyCheck dependencies
+set_credentials() {
+    # Set the credentials to access to the backend.
+    echo -e "\e[39m[+] Setting the backend credentials...\e[39m"
+    echo -n "    Please choose a username for TinyCheck's backend: "
+    read login
+    echo -n "    Please choose a password for TinyCheck's backend: "
+    read -s password1
+    echo ""
+    echo -n "    Please confirm the password: "
+    read -s password2
+    echo ""
 
-   echo -e "\e[39m[+] Checking internet connectivity to install dependencies\e[39m"
-   if nc -zw1 example.com 443; then
-       echo -e "\e[92m    [✔] Internet link is connected\e[39m"
-   else
-       echo -e "\e[91m    [✘] No internet connection, exiting.\e[39m"
-       exit 1
-   fi
+    if [ $password1 = $password2 ]; then
+        password=$(echo -n "$password1" | sha256sum | cut -d" " -f1)
+        sed -i "s/userlogin/$login/g" /usr/share/tinycheck/config.yaml
+        sed -i "s/userpassword/$password/g" /usr/share/tinycheck/config.yaml
+        echo -e "\e[92m    [✔] Credentials saved successfully!\e[39m"
+    else
+        echo -e "\e[91m    [✘] The passwords aren't equal, please retry.\e[39m"
+        set_credentials
+    fi
 }
 
 create_directory() {
@@ -87,7 +97,7 @@ EOL
     echo -e "\e[92m    [✔] Creating backend service\e[39m"
     cat >/lib/systemd/system/tinycheck-backend.service <<EOL
 [Unit]
-Description=TinyCheck frontend service
+Description=TinyCheck backend service
 
 [Service]
 Type=simple
@@ -288,7 +298,7 @@ cleaning() {
     systemctl disable suricata.service &> /dev/null
 
     # Removing some useless dependencies.
-    sudo apt autoremove -y
+    sudo apt autoremove -y &> /dev/null 
 }
 
 check_wlan_interfaces() {
@@ -345,9 +355,9 @@ if [[ $EUID -ne 0 ]]; then
 else
     welcome_screen
     check_operating_system
-    check_connection
     check_wlan_interfaces
     create_directory
+    set_credentials
     check_dependencies
     configure_dnsmask
     configure_dhcpcd
